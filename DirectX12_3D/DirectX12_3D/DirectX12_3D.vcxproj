@@ -125,6 +125,7 @@
     <ClInclude Include="Typedef.h" />
     <ClInclude Include="WICTextureLoader12.h" />
     <ClInclude Include="Window.h" />
+    <ClInclude Include="Xaudio.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Device.cpp" />
@@ -134,6 +135,7 @@
     <ClCompile Include="Texture.cpp" />
     <ClCompile Include="WICTextureLoader12.cpp" />
     <ClCompile Include="Window.cpp" />
+    <ClCompile Include="Xaudio.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Shader.hlsl">

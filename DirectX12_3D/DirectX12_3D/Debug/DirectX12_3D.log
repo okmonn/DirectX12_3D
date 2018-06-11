@@ -1,5 +1,2 @@
-﻿  Main.cpp
-  c:\program files (x86)\windows kits\10\include\10.0.17134.0\um\dinput.h: DIRECTINPUT_VERSION undefined. Defaulting to version 0x0800
-  PMD.cpp
-  コードを生成中...
+﻿  Xaudio.cpp
   DirectX12_3D.vcxproj -> C:\Users\1601271\Documents\GitHub\DirectX12_3D\DirectX12_3D\Debug\DirectX12_3D.exe
