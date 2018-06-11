@@ -19,12 +19,15 @@ PMD::PMD(std::weak_ptr<Device>dev, std::weak_ptr<Texture>tex) : dev(dev), tex(te
 // デストラクタ
 PMD::~PMD()
 {
-	pmd.con.resource->Unmap(0, nullptr);
+	for (auto itr = pmd.begin(); itr != pmd.end(); ++itr)
+	{
+		itr->second.con.resource->Unmap(0, nullptr);
 
-	RELEASE(pmd.icon.resource);
-	RELEASE(pmd.vcon.resource);
-	RELEASE(pmd.con.resource);
-	RELEASE(pmd.con.heap);
+		RELEASE(itr->second.icon.resource);
+		RELEASE(itr->second.vcon.resource);
+		RELEASE(itr->second.con.resource);
+		RELEASE(itr->second.con.heap);
+	}
 }
 
 // 文字列の検索
@@ -64,7 +67,7 @@ std::string PMD::FolderPath(std::string path, const char* textureName)
 }
 
 // 読み込み
-HRESULT PMD::Load(std::string fileName)
+HRESULT PMD::Load(USHORT* index, std::string fileName)
 {
 	//ファイル
 	FILE *file;
@@ -82,15 +85,15 @@ HRESULT PMD::Load(std::string fileName)
 
 	//ヘッダーの読み込み
 	{
-		fread(&pmd.header, sizeof(pmd.header), 1, file);
+		fread(&pmd[index].header, sizeof(pmd[index].header), 1, file);
 	}
 
 	//頂点データの読み込み
 	{
 		//頂点データ配列のメモリサイズ確保
-		pmd.vertex.resize(pmd.header.vertexNum);
+		pmd[index].vertex.resize(pmd[index].header.vertexNum);
 
-		for (auto& v : pmd.vertex)
+		for (auto& v : pmd[index].vertex)
 		{
 			fread(&v.pos,        sizeof(v.pos),        1, file);
 			fread(&v.normal,     sizeof(v.normal),     1, file);
@@ -109,9 +112,9 @@ HRESULT PMD::Load(std::string fileName)
 		fread(&indexNum, sizeof(UINT), 1, file);
 
 		//インデックスデータ配列のメモリサイズ確保
-		pmd.index.resize(indexNum);
+		pmd[index].index.resize(indexNum);
 
-		for (auto& i : pmd.index)
+		for (auto& i : pmd[index].index)
 		{
 			fread(&i, sizeof(USHORT), 1, file);
 		}
@@ -125,9 +128,9 @@ HRESULT PMD::Load(std::string fileName)
 		fread(&materialNum, sizeof(UINT), 1, file);
 
 		//マテリアルデータ配列のメモリサイズ確保
-		pmd.material.resize(materialNum);
+		pmd[index].material.resize(materialNum);
 
-		fread(&pmd.material[0], sizeof(MaterialData), materialNum, file);
+		fread(&pmd[index].material[0], sizeof(MaterialData), materialNum, file);
 	}
 
 	//ボーンデータの読み込み
@@ -138,9 +141,9 @@ HRESULT PMD::Load(std::string fileName)
 		fread(&bornNum, sizeof(USHORT), 1, file);
 
 		//ボーンデータ配列のメモリサイズ確保
-		pmd.born.resize(bornNum);
+		pmd[index].born.resize(bornNum);
 
-		for (auto& b : pmd.born)
+		for (auto& b : pmd[index].born)
 		{
 			fread(&b.name,                 sizeof(b.name),				   1, file);
 			fread(&b.parent_born_index,    sizeof(b.parent_born_index),	   1, file);
@@ -154,21 +157,21 @@ HRESULT PMD::Load(std::string fileName)
 	//ファイルを閉じる
 	fclose(file);
 
-	result = LoadTexture(FindString(fileName, '/'));
-	result = CreateVertexIndex();
-	result = CreateConstantView();
+	result = LoadTexture(index, FindString(fileName, '/'));
+	result = CreateVertexIndex(index);
+	result = CreateConstantView(index);
 
 	return result;
 }
 
 // テクスチャの読み込み
-HRESULT PMD::LoadTexture(std::string fileName)
+HRESULT PMD::LoadTexture(USHORT* index, std::string fileName)
 {
-	for (UINT i = 0; i < pmd.material.size(); ++i)
+	for (UINT i = 0; i < pmd[index].material.size(); ++i)
 	{
-		if (pmd.material[i].textureFilePath[0] != '\0')
+		if (pmd[index].material[i].textureFilePath[0] != '\0')
 		{
-			tex.lock()->LoadWIC(&pmd.id[i], tex.lock()->ChangeUnicode(FolderPath(fileName, pmd.material[i].textureFilePath).c_str()));
+			tex.lock()->LoadWIC(&pmd[index].id[i], tex.lock()->ChangeUnicode(FolderPath(fileName, pmd[index].material[i].textureFilePath).c_str()));
 			if (FAILED(result))
 			{
 				OutputDebugString(_T("\nPMDのテクスチャ読み込み：失敗\n"));
@@ -180,7 +183,7 @@ HRESULT PMD::LoadTexture(std::string fileName)
 }
 
 // 頂点バッファの生成
-HRESULT PMD::CreateVertexBuffer(void)
+HRESULT PMD::CreateVertexBuffer(USHORT* index)
 {
 	//ヒープ設定用構造体の設定
 	D3D12_HEAP_PROPERTIES prop = {};
@@ -193,7 +196,7 @@ HRESULT PMD::CreateVertexBuffer(void)
 	//リソース設定用構造体の設定
 	D3D12_RESOURCE_DESC desc = {};
 	desc.Dimension				= D3D12_RESOURCE_DIMENSION::D3D12_RESOURCE_DIMENSION_BUFFER;
-	desc.Width					= (sizeof(VertexData) * pmd.vertex.size());
+	desc.Width					= (sizeof(VertexData) * pmd[index].vertex.size());
 	desc.Height					= 1;
 	desc.DepthOrArraySize		= 1;
 	desc.MipLevels				= 1;
@@ -204,7 +207,7 @@ HRESULT PMD::CreateVertexBuffer(void)
 
 	//リソース生成
 	{
-		result = dev.lock()->GetDevice()->CreateCommittedResource(&prop, D3D12_HEAP_FLAGS::D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&pmd.vcon.resource));
+		result = dev.lock()->GetDevice()->CreateCommittedResource(&prop, D3D12_HEAP_FLAGS::D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&pmd[index].vcon.resource));
 		if (FAILED(result))
 		{
 			OutputDebugString(_T("\nPMDの頂点バッファ用リソースの生成：失敗\n"));
@@ -217,7 +220,7 @@ HRESULT PMD::CreateVertexBuffer(void)
 
 	//マッピング
 	{
-		result = pmd.vcon.resource->Map(0, &range, reinterpret_cast<void**>(&pmd.vcon.data));
+		result = pmd[index].vcon.resource->Map(0, &range, reinterpret_cast<void**>(&pmd[index].vcon.data));
 		if (FAILED(result))
 		{
 			OutputDebugString(_T("\nPMDの頂点バッファ用リソースのマッピング：失敗\n"));
@@ -225,26 +228,26 @@ HRESULT PMD::CreateVertexBuffer(void)
 		}
 
 		//頂点データのコピー
-		memcpy(pmd.vcon.data, &pmd.vertex[0], (sizeof(VertexData) * pmd.vertex.size()));
+		memcpy(pmd[index].vcon.data, &pmd[index].vertex[0], (sizeof(VertexData) * pmd[index].vertex.size()));
 	}
 
 	//アンマッピング
-	pmd.vcon.resource->Unmap(0, nullptr);
+	pmd[index].vcon.resource->Unmap(0, nullptr);
 
 	//頂点バッファ設定用構造体の設定
 	{
-		pmd.vcon.view.BufferLocation	= pmd.vcon.resource->GetGPUVirtualAddress();
-		pmd.vcon.view.SizeInBytes		= sizeof(VertexData) * pmd.vertex.size();
-		pmd.vcon.view.StrideInBytes		= sizeof(VertexData);
+		pmd[index].vcon.view.BufferLocation		= pmd[index].vcon.resource->GetGPUVirtualAddress();
+		pmd[index].vcon.view.SizeInBytes		= sizeof(VertexData) * pmd[index].vertex.size();
+		pmd[index].vcon.view.StrideInBytes		= sizeof(VertexData);
 	}
 
 	return result;
 }
 
 // 頂点インデックスの生成
-HRESULT PMD::CreateVertexIndex(void)
+HRESULT PMD::CreateVertexIndex(USHORT* index)
 {
-	result = CreateVertexBuffer();
+	result = CreateVertexBuffer(index);
 	if (FAILED(result))
 	{
 		return result;
@@ -261,7 +264,7 @@ HRESULT PMD::CreateVertexIndex(void)
 	//リソース設定用構造体の設定
 	D3D12_RESOURCE_DESC desc = {};
 	desc.Dimension				= D3D12_RESOURCE_DIMENSION::D3D12_RESOURCE_DIMENSION_BUFFER;
-	desc.Width					= (sizeof(USHORT) * pmd.index.size());
+	desc.Width					= (sizeof(USHORT) * pmd[index].index.size());
 	desc.Height					= 1;
 	desc.DepthOrArraySize		= 1;
 	desc.MipLevels				= 1;
@@ -272,7 +275,7 @@ HRESULT PMD::CreateVertexIndex(void)
 
 	//リソース生成
 	{
-		result = dev.lock()->GetDevice()->CreateCommittedResource(&prop, D3D12_HEAP_FLAGS::D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&pmd.icon.resource));
+		result = dev.lock()->GetDevice()->CreateCommittedResource(&prop, D3D12_HEAP_FLAGS::D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&pmd[index].icon.resource));
 		if (FAILED(result))
 		{
 			OutputDebugString(_T("\nPMDの頂点インデックス用リソースの生成：失敗\n"));
@@ -285,7 +288,7 @@ HRESULT PMD::CreateVertexIndex(void)
 
 	//マッピング
 	{
-		result = pmd.icon.resource->Map(0, &range, reinterpret_cast<void**>(&pmd.icon.data));
+		result = pmd[index].icon.resource->Map(0, &range, reinterpret_cast<void**>(&pmd[index].icon.data));
 		if (FAILED(result))
 		{
 			OutputDebugString(_T("\nPMDの頂点インデックスのマッピング：失敗\n"));
@@ -294,33 +297,33 @@ HRESULT PMD::CreateVertexIndex(void)
 	}
 
 	//コピー
-	memcpy(pmd.icon.data, &pmd.index[0], sizeof(USHORT) * pmd.index.size());
+	memcpy(pmd[index].icon.data, &pmd[index].index[0], sizeof(USHORT) * pmd[index].index.size());
 
 	//アンマッピング
-	pmd.icon.resource->Unmap(0, nullptr);
+	pmd[index].icon.resource->Unmap(0, nullptr);
 
 	//頂点インデックスビュー設定用構造体の設定
 	{
-		pmd.icon.view.BufferLocation	= pmd.icon.resource->GetGPUVirtualAddress();
-		pmd.icon.view.SizeInBytes		= sizeof(USHORT) * pmd.index.size();
-		pmd.icon.view.Format			= DXGI_FORMAT::DXGI_FORMAT_R16_UINT;
+		pmd[index].icon.view.BufferLocation		= pmd[index].icon.resource->GetGPUVirtualAddress();
+		pmd[index].icon.view.SizeInBytes		= sizeof(USHORT) * pmd[index].index.size();
+		pmd[index].icon.view.Format				= DXGI_FORMAT::DXGI_FORMAT_R16_UINT;
 	}
 
 	return result;
 }
 
 // 定数バッファ用ヒープの生成
-HRESULT PMD::CreateConstantHeap(void)
+HRESULT PMD::CreateConstantHeap(USHORT* index)
 {
 	//定数バッファ設定用構造体の設定
 	D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-	desc.NumDescriptors		= 2 + pmd.material.size();
+	desc.NumDescriptors		= 2 + pmd[index].material.size();
 	desc.Flags				= D3D12_DESCRIPTOR_HEAP_FLAGS::D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 	desc.Type				= D3D12_DESCRIPTOR_HEAP_TYPE::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 
 	//ヒープ生成
 	{
-		result = dev.lock()->GetDevice()->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&pmd.con.heap));
+		result = dev.lock()->GetDevice()->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&pmd[index].con.heap));
 		if (FAILED(result))
 		{
 			OutputDebugString(_T("\nPMDの定数バッファ用ヒープの生成：失敗\n"));
@@ -328,16 +331,16 @@ HRESULT PMD::CreateConstantHeap(void)
 		}
 
 		//ヒープサイズを取得
-		pmd.con.size = dev.lock()->GetDevice()->GetDescriptorHandleIncrementSize(desc.Type);
+		pmd[index].con.size = dev.lock()->GetDevice()->GetDescriptorHandleIncrementSize(desc.Type);
 	}
 
 	return result;
 }
 
 // 定数バッファ用リソースの生成
-HRESULT PMD::CreateConstant(void)
+HRESULT PMD::CreateConstant(USHORT* index)
 {
-	result = CreateConstantHeap();
+	result = CreateConstantHeap(index);
 	if (FAILED(result))
 	{
 		return result;
@@ -365,7 +368,7 @@ HRESULT PMD::CreateConstant(void)
 
 	//リソース生成
 	{
-		result = dev.lock()->GetDevice()->CreateCommittedResource(&prop, D3D12_HEAP_FLAGS::D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&pmd.con.resource));
+		result = dev.lock()->GetDevice()->CreateCommittedResource(&prop, D3D12_HEAP_FLAGS::D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&pmd[index].con.resource));
 		if (FAILED(result))
 		{
 			OutputDebugString(_T("\nPMDの定数バッファ用リソースの生成：失敗\n"));
@@ -377,9 +380,9 @@ HRESULT PMD::CreateConstant(void)
 }
 
 // 定数バッファビューの生成
-HRESULT PMD::CreateConstantView(void)
+HRESULT PMD::CreateConstantView(USHORT* index)
 {
-	result = CreateConstant();
+	result = CreateConstant(index);
 	if (FAILED(result))
 	{
 		return result;
@@ -390,11 +393,11 @@ HRESULT PMD::CreateConstantView(void)
 	desc.SizeInBytes = (sizeof(Mat) + 0xff) &~0xff;
 
 	//GPUアドレス
-	D3D12_GPU_VIRTUAL_ADDRESS address = pmd.con.resource->GetGPUVirtualAddress();
+	D3D12_GPU_VIRTUAL_ADDRESS address = pmd[index].con.resource->GetGPUVirtualAddress();
 	//ディスクリプターのCPUハンドル
-	D3D12_CPU_DESCRIPTOR_HANDLE handle = pmd.con.heap->GetCPUDescriptorHandleForHeapStart();
+	D3D12_CPU_DESCRIPTOR_HANDLE handle = pmd[index].con.heap->GetCPUDescriptorHandleForHeapStart();
 
-	for (UINT i = 0; i < pmd.material.size(); ++i)
+	for (UINT i = 0; i < pmd[index].material.size(); ++i)
 	{
 		desc.BufferLocation = address;
 
@@ -403,7 +406,7 @@ HRESULT PMD::CreateConstantView(void)
 
 		address += desc.SizeInBytes;
 
-		handle.ptr += pmd.con.size;
+		handle.ptr += pmd[index].con.size;
 	}
 
 	//送信範囲
@@ -411,7 +414,7 @@ HRESULT PMD::CreateConstantView(void)
 
 	//マッピング
 	{
-		result = pmd.con.resource->Map(0, &range, (void**)(&pmd.con.data));
+		result = pmd[index].con.resource->Map(0, &range, (void**)(&pmd[index].con.data));
 		if (FAILED(result))
 		{
 			OutputDebugString(_T("\nPMDの定数バッファ用リソースのマッピング：失敗\n"));
@@ -419,22 +422,22 @@ HRESULT PMD::CreateConstantView(void)
 		}
 
 		//コピー
-		memcpy(pmd.con.data, &mat, sizeof(DirectX::XMMATRIX));
+		memcpy(pmd[index].con.data, &mat, sizeof(DirectX::XMMATRIX));
 	}
 
 	return result;
 }
 
 // 描画
-void PMD::Draw(void)
+void PMD::Draw(USHORT* index)
 {
 	//セット
 	{
 		//頂点バッファビューのセット
-		dev.lock()->GetComList()->IASetVertexBuffers(0, 1, &pmd.vcon.view);
+		dev.lock()->GetComList()->IASetVertexBuffers(0, 1, &pmd[index].vcon.view);
 
 		//頂点インデックスビューのセット
-		dev.lock()->GetComList()->IASetIndexBuffer(&pmd.icon.view);
+		dev.lock()->GetComList()->IASetIndexBuffer(&pmd[index].icon.view);
 
 		dev.lock()->GetComList()->IASetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY::D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	}
@@ -443,23 +446,23 @@ void PMD::Draw(void)
 	UINT offset = 0;
 
 	//送信用データ
-	UINT8* data = pmd.con.data;
+	UINT8* data = pmd[index].con.data;
 
 	//ヒープの先頭ハンドル
-	D3D12_GPU_DESCRIPTOR_HANDLE handle = pmd.con.heap->GetGPUDescriptorHandleForHeapStart();
+	D3D12_GPU_DESCRIPTOR_HANDLE handle = pmd[index].con.heap->GetGPUDescriptorHandleForHeapStart();
 
-	for (UINT i = 0; i < pmd.material.size(); ++i)
+	for (UINT i = 0; i < pmd[index].material.size(); ++i)
 	{
-		mat.diffuse = pmd.material[i].diffuse;
+		mat.diffuse = pmd[index].material[i].diffuse;
 
-		mat.texFlag = (pmd.material[i].textureFilePath[0] != '\0');
+		mat.texFlag = (pmd[index].material[i].textureFilePath[0] != '\0');
 		if (mat.texFlag == TRUE)
 		{
-			tex.lock()->SetDrawWIC(&pmd.id[i]);
+			tex.lock()->SetDrawWIC(&pmd[index].id[i]);
 		}
 		else
 		{
-			for (auto itr = pmd.id.begin(); itr != pmd.id.end(); ++itr)
+			for (auto itr = pmd[index].id.begin(); itr != pmd[index].id.end(); ++itr)
 			{
 				tex.lock()->SetDescriptorWIC(&itr->second);
 				break;
@@ -467,7 +470,7 @@ void PMD::Draw(void)
 		}
 
 		//定数ヒープのセット
-		dev.lock()->GetComList()->SetDescriptorHeaps(1, &pmd.con.heap);
+		dev.lock()->GetComList()->SetDescriptorHeaps(1, &pmd[index].con.heap);
 
 		//ディスクリプターテーブルのセット
 		dev.lock()->GetComList()->SetGraphicsRootDescriptorTable(2, handle);
@@ -476,15 +479,15 @@ void PMD::Draw(void)
 		memcpy(data, &mat, sizeof(Mat));
 
 		//描画
-		dev.lock()->GetComList()->DrawIndexedInstanced(pmd.material[i].indexNum, 1, offset, 0, 0);
+		dev.lock()->GetComList()->DrawIndexedInstanced(pmd[index].material[i].indexNum, 1, offset, 0, 0);
 
 		//ハンドル更新
-		handle.ptr += pmd.con.size;
+		handle.ptr += pmd[index].con.size;
 
 		//データ更新
 		data = (UINT8*)(((sizeof(Mat) + 0xff) &~0xff) + (CHAR*)(data));
 
 		//オフセット更新
-		offset +=pmd.material[i].indexNum;
+		offset +=pmd[index].material[i].indexNum;
 	}
 }

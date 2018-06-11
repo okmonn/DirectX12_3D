@@ -33,3 +33,5 @@ EXTERN_MAIN std::shared_ptr<Texture>tex;
 
 // PMD
 EXTERN_MAIN std::shared_ptr<PMD>pmd;
+
+USHORT id = 0;

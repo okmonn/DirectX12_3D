@@ -170,27 +170,27 @@ public:
 	std::string FolderPath(std::string path, const char* textureName);
 
 	// 読み込み
-	HRESULT Load(std::string fileName);
+	HRESULT Load(USHORT* index, std::string fileName);
 
 	// テクスチャの読み込み
-	HRESULT LoadTexture(std::string fileName);
+	HRESULT LoadTexture(USHORT* index, std::string fileName);
 
 	// 描画
-	void Draw(void);
+	void Draw(USHORT* index);
 
 private:
 	// 頂点バッファの生成
-	HRESULT CreateVertexBuffer(void);
+	HRESULT CreateVertexBuffer(USHORT* index);
 	// 頂点インデックスの生成
-	HRESULT CreateVertexIndex(void);
+	HRESULT CreateVertexIndex(USHORT* index);
 
 
 	// 定数バッファ用ヒープの生成
-	HRESULT CreateConstantHeap(void);
+	HRESULT CreateConstantHeap(USHORT* index);
 	// 定数バッファ用リソースの生成
-	HRESULT CreateConstant(void);
+	HRESULT CreateConstant(USHORT* index);
 	// 定数バッファビューの生成
-	HRESULT CreateConstantView(void);
+	HRESULT CreateConstantView(USHORT* index);
 
 
 	// デバイス
@@ -203,7 +203,7 @@ private:
 	HRESULT result;
 
 	// PMD
-	Pmd pmd;
+	std::map<USHORT*,  Pmd>pmd;
 
 	// マテリアル
 	Mat mat;

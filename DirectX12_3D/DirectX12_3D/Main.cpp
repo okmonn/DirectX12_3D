@@ -19,7 +19,7 @@ void Create(void)
 	//PMD
 	pmd = std::make_shared<PMD>(dev, tex);
 
-	pmd->Load("img/ミク.pmd");
+	pmd->Load(&id, "img/ミク.pmd");
 }
 
 // メモリ解放処理
@@ -58,7 +58,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			}
 
 			dev->Set();
-			pmd->Draw();
+			pmd->Draw(&id);
 			dev->Do();
 		}
 	}
