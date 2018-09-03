@@ -1,3 +1,4 @@
+#define _ENABLE_EXTENDED_ALIGNED_STORAGE
 #define EXPORT_MAIN
 #include "Main.h"
 

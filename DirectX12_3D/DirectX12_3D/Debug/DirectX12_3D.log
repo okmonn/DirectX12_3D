@@ -1,2 +1,13 @@
-﻿  Xaudio.cpp
+﻿  Main.cpp
+  c:\program files (x86)\windows kits\10\include\10.0.17134.0\um\dinput.h: DIRECTINPUT_VERSION undefined. Defaulting to version 0x0800
+c:\program files (x86)\microsoft visual studio\2017\professional\vc\tools\msvc\14.15.26726\include\memory(1865): warning C4316: 'std::_Ref_count_obj<_Ty>': ヒープで割り当てられたオブジェクトが 16 にアラインメントされていない可能性があります
+          with
+          [
+              _Ty=Device
+          ]
+  c:\users\1601271\documents\github\directx12_3d\directx12_3d\directx12_3d\main.cpp(15): note: コンパイル対象の関数 テンプレート インスタンス化 'std::shared_ptr<_Ty> std::make_shared<Device,std::shared_ptr<Window>&>(std::shared_ptr<Window> &)' のリファレンスを確認してください
+          with
+          [
+              _Ty=Device
+          ]
   DirectX12_3D.vcxproj -> C:\Users\1601271\Documents\GitHub\DirectX12_3D\DirectX12_3D\Debug\DirectX12_3D.exe
